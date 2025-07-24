@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archives of Grade 9 Ruby</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #ffe6f0; color: #333; }
+    .login-box, .home { max-width: 1000px; margin: 50px auto; background: #fff0f5; padding: 20px; border-radius: 10px; }
+    .login-box { text-align: center; }
+    .login-box h2 { margin-bottom: 20px; }
+    input, button, textarea, select {
+      display: block;
+      width: 90%;
+      margin: 10px auto;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button { background-color: #ff6699; color: white; cursor: pointer; }
+    .home { display: flex; gap: 20px; }
+    .sidebar, .rightbar { width: 25%; background: #ffe6ea; border-radius: 10px; padding: 10px; height: fit-content; }
+    .main-feed { width: 50%; background: #fff; padding: 10px; border-radius: 10px; }
+    .post, .comment { background: #ffe6ea; margin: 10px 0; padding: 10px; border-radius: 8px; }
+    .comment { font-size: 14px; margin-left: 20px; }
+    .reaction-btn { margin-right: 5px; cursor: pointer; }
+    .calendar { margin-top: 20px; }
+    .admin-controls button { background: #cc0033; margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const app = document.getElementById('app');
+    let users = JSON.parse(localStorage.getItem('users') || '[]');
+    let posts = JSON.parse(localStorage.getItem('posts') || '[]');
+    let currentUser = JSON.parse(localStorage.getItem('currentUser'));
+
+    function saveAll() {
+      localStorage.setItem('users', JSON.stringify(users));
+      localStorage.setItem('posts', JSON.stringify(posts));
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    }
+
+    function loginScreen() {
+      app.innerHTML = `
+        <div class="login-box">
+          <h2>Are You A Ruby Student?</h2>
+          <input id="email" placeholder="Gmail" />
+          <input id="password" type="password" placeholder="Password" />
+          <button onclick="login()">Login / Register</button>
+        </div>`;
+    }
+
+    function login() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      let user = users.find(u => u.email === email);
+
+      if (!user) {
+        user = { email, password, nickname: '', birthdate: '', role: email === 'lomeriobench@gmail.com' && password === '251438' ? 'admin' : 'member' };
+        users.push(user);
+      } else if (user.password !== password) {
+        return alert('Incorrect password');
+      }
+
+      currentUser = user;
+      saveAll();
+      renderHome();
+    }
+
+    function renderHome() {
+      const isAdmin = currentUser.role === 'admin';
+
+      const userList = users.map(u => `<li>${u.nickname || u.email} - ${u.birthdate || 'N/A'}</li>`).join('');
+      const birthdayList = users.filter(u => u.birthdate).map(u => `<li>${u.nickname || u.email}: ${u.birthdate}</li>`).join('');
+
+      const feed = posts.map((p, i) => {
+        const comments = p.comments.map(c => `<div class="comment">${c}</div>`).join('');
+        return `<div class="post">
+          <b>${p.author}</b><br>${p.content}<br>
+          <button class="reaction-btn" onclick="react(${i}, '❤️')">❤️ ${p.reactions.heart}</button>
+          <button class="reaction-btn" onclick="react(${i}, '😆')">😆 ${p.reactions.laugh}</button>
+          <button class="reaction-btn" onclick="react(${i}, '👍')">👍 ${p.reactions.like}</button>
+          <textarea id="comment${i}" placeholder="Add a comment"></textarea>
+          <button onclick="addComment(${i})">Comment</button>
+          ${isAdmin ? `<div class="admin-controls"><button onclick="deletePost(${i})">Delete</button></div>` : ''}
+          ${comments}
+        </div>`;
+      }).join('');
+
+      app.innerHTML = `
+        <div class="home">
+          <div class="sidebar">
+            <h3>Members</h3>
+            <input id="search" placeholder="Search members" oninput="searchMembers()">
+            <ul id="memberList">${userList}</ul>
+          </div>
+          <div class="main-feed">
+            <h3>Post Something</h3>
+            <textarea id="newPost"></textarea>
+            <button onclick="postThread()">Post</button>
+            <h3>Wall</h3>
+            <div id="posts">${feed}</div>
+          </div>
+          <div class="rightbar">
+            <h3>Your Profile</h3>
+            <input id="nickname" value="${currentUser.nickname}" placeholder="Nickname" />
+            <input id="birthdate" type="date" value="${currentUser.birthdate}" />
+            <button onclick="saveProfile()">Save Profile</button>
+            ${isAdmin ? '<h3>Admin Tools</h3>' + users.map((u, i) => u.email !== currentUser.email ? `<button onclick="ban(${i})">Ban ${u.email}</button>` : '').join('') : ''}
+            <div class="calendar">
+              <h3>🎂 Birthdays</h3>
+              <ul>${birthdayList}</ul>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function postThread() {
+      const content = document.getElementById('newPost').value;
+      if (!content) return;
+      posts.unshift({ content, author: currentUser.nickname || currentUser.email, comments: [], reactions: { heart: 0, laugh: 0, like: 0 } });
+      saveAll();
+      renderHome();
+    }
+
+    function addComment(index) {
+      const comment = document.getElementById(`comment${index}`).value;
+      if (!comment) return;
+      posts[index].comments.push(`${currentUser.nickname || currentUser.email}: ${comment}`);
+      saveAll();
+      renderHome();
+    }
+
+    function deletePost(index) {
+      posts.splice(index, 1);
+      saveAll();
+      renderHome();
+    }
+
+    function ban(index) {
+      users.splice(index, 1);
+      saveAll();
+      renderHome();
+    }
+
+    function saveProfile() {
+      currentUser.nickname = document.getElementById('nickname').value;
+      currentUser.birthdate = document.getElementById('birthdate').value;
+      users = users.map(u => u.email === currentUser.email ? currentUser : u);
+      saveAll();
+      renderHome();
+    }
+
+    function react(index, type) {
+      posts[index].reactions = posts[index].reactions || { heart: 0, laugh: 0, like: 0 };
+      if (type === '❤️') posts[index].reactions.heart++;
+      if (type === '😆') posts[index].reactions.laugh++;
+      if (type === '👍') posts[index].reactions.like++;
+      saveAll();
+      renderHome();
+    }
+
+    function searchMembers() {
+      const query = document.getElementById('search').value.toLowerCase();
+      const filtered = users.filter(u => (u.nickname || u.email).toLowerCase().includes(query));
+      document.getElementById('memberList').innerHTML = filtered.map(u => `<li>${u.nickname || u.email} - ${u.birthdate || 'N/A'}</li>`).join('');
+    }
+
+    if (currentUser) renderHome();
+    else loginScreen();
+  </script>
+</body>
+</html>
